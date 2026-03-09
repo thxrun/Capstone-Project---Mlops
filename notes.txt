@@ -1,0 +1,159 @@
+Notes:
+
+ML FLow:
+
+These four functions in MLflow record information about a machine learning experiment. Each has a specific role.
+
+1. mlflow.start_run()
+
+Starts a new experiment run.
+Everything logged after this belongs to that run.
+
+Example:
+
+import mlflow
+
+with mlflow.start_run():
+    # training code
+    pass
+
+Effect:
+
+Creates a run ID
+
+MLflow begins tracking parameters, metrics, and artifacts for that run.
+
+Think of it as opening an experiment session.
+
+2. mlflow.log_param()
+
+Stores hyperparameters or configuration values used during training.
+
+Example:
+
+mlflow.log_param("C", 1.0)
+mlflow.log_param("vectorizer", "CountVectorizer")
+
+Effect:
+
+Saved under parameters in the MLflow UI.
+
+Helps compare different experiment settings.
+
+Example comparison:
+
+Run	C	Accuracy
+Run1	0.1	0.86
+Run2	1.0	0.91
+3. mlflow.log_metric()
+
+Records model performance numbers.
+
+Example:
+
+mlflow.log_metric("accuracy", 0.91)
+mlflow.log_metric("f1_score", 0.88)
+
+Effect:
+
+Stored under metrics.
+
+Lets you track which model performed best.
+
+Typical metrics:
+
+accuracy
+
+precision
+
+recall
+
+f1-score
+
+loss
+
+4. mlflow.log_model()
+
+Saves the trained model as an artifact.
+
+Example:
+
+import mlflow.sklearn
+mlflow.sklearn.log_model(model, "model")
+
+Effect:
+
+MLflow stores the model files (model.pkl, MLmodel, dependencies).
+
+The model can later be loaded or deployed.
+
+Simple workflow example
+import mlflow
+import mlflow.sklearn
+
+with mlflow.start_run():
+
+    mlflow.log_param("model", "logistic_regression")
+
+    model.fit(X_train, y_train)
+
+    accuracy = model.score(X_test, y_test)
+    mlflow.log_metric("accuracy", accuracy)
+
+    mlflow.sklearn.log_model(model, "model")
+
+Result in MLflow:
+
+Experiment Run
+   ├── parameters → model=logistic_regression
+   ├── metrics → accuracy=0.91
+   └── artifacts → trained model
+Practical interpretation
+
+Without MLflow you might have:
+
+model_v1.pkl
+model_v2.pkl
+model_final.pkl
+model_best.pkl
+
+With MLflow you have:
+
+Experiment
+   Run1
+   Run2
+   Run3
+
+Each run contains parameters + metrics + model.
+
+If you want to work in MLOps roles, the next thing worth learning is how MLflow loads a model for prediction (mlflow.pyfunc.load_model), because that’s what is used in deployment.
+
+so they basically save the model too
+
+Yes. MLflow can save the trained model, but it also stores more than just the model.
+
+What MLflow saves in one run
+
+When you use:
+
+mlflow.sklearn.log_model(model, "model")
+
+MLflow saves:
+
+The trained model file
+Example: model.pkl
+
+Model configuration file
+MLmodel → tells MLflow how to load the model.
+
+Environment dependencies
+
+requirements.txt
+
+conda.yaml
+
+Experiment metadata
+
+parameters (C, max_iter)
+
+metrics (accuracy, f1_score)

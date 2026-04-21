@@ -1,3 +1,4 @@
+import os
 import json
 import mlflow
 import dagshub
@@ -7,13 +8,33 @@ from src.logger import logging
 warnings.simplefilter("ignore", UserWarning)
 warnings.filterwarnings("ignore")
 
-# Below code block is for local use
-mlflow.set_tracking_uri('https://dagshub.com/tharunkarthik2227/Capstone-Project---Mlops.mlflow')
-dagshub.init(repo_owner='tharunkarthik2227', repo_name='Capstone-Project---Mlops', mlflow=True)
+# -------------------------------------------------------------------------------------
+# PRODUCTION SETUP
+# -------------------------------------------------------------------------------------
+dagshub_token = os.getenv("CAPSTONE_TEST")
+if not dagshub_token:
+    raise EnvironmentError("CAPSTONE_TEST environment variable is not set")
+
+os.environ["MLFLOW_TRACKING_USERNAME"] = dagshub_token
+os.environ["MLFLOW_TRACKING_PASSWORD"] = dagshub_token
+
+dagshub_url = "https://dagshub.com"
+repo_owner = "tharunkarthik2227"
+repo_name = "Capstone-Project---Mlops"
+
+mlflow.set_tracking_uri(f"{dagshub_url}/{repo_owner}/{repo_name}.mlflow")
+
+dagshub.init(
+    repo_owner=repo_owner,
+    repo_name=repo_name,
+    mlflow=True,
+)
 
 
+# -------------------------------------------------------------------------------------
+# CORE LOGIC
+# -------------------------------------------------------------------------------------
 def load_model_info(file_path: str) -> dict:
-    """Load the model info from a JSON file."""
     try:
         with open(file_path, 'r') as file:
             model_info = json.load(file)
@@ -28,12 +49,14 @@ def load_model_info(file_path: str) -> dict:
 
 
 def register_model(model_name: str, model_info: dict):
-    """Register the model to the MLflow Model Registry."""
     try:
         model_uri = model_info['model_uri']
 
         logging.info('Registering model from URI: %s', model_uri)
-        model_version = mlflow.register_model(model_uri=model_uri, name=model_name)
+        model_version = mlflow.register_model(
+            model_uri=model_uri,
+            name=model_name
+        )
 
         logging.info(
             'Model %s version %s registered successfully.',

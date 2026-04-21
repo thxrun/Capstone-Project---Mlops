@@ -1,18 +1,3 @@
-# app.py  (enhanced)
-#
-# Key fixes over the original:
-#   1. normalize_text() now uses the SAME logic as the training pipeline
-#      (negation preservation, contraction expansion, TF-IDF compatible) —
-#      a mismatch here is a leading cause of production accuracy being lower
-#      than eval accuracy.
-#   2. Environment variable block consolidated — the original tried BOTH local
-#      and production init, causing a crash when CAPSTONE_TEST is not set
-#      during local development. Now a single conditional block handles both.
-#   3. vectorizer column names built from the actual vocabulary, not just
-#      range(n), so they always match what the model was trained on.
-#   4. Minor: removed unused numpy import, fixed whitespace, added
-#      a /healthz endpoint for Docker/k8s liveness probes.
-
 from flask import Flask, render_template, request
 import mlflow
 import pickle
@@ -38,9 +23,9 @@ warnings.filterwarnings("ignore")
 # ---------------------------------------------------------------------------
 # Download required NLTK data (idempotent — safe to run on every startup)
 # ---------------------------------------------------------------------------
-nltk.download('wordnet',   quiet=True)
+nltk.download('wordnet', quiet=True)
 nltk.download('stopwords', quiet=True)
-nltk.download('omw-1.4',   quiet=True)
+nltk.download('omw-1.4', quiet=True)
 
 # ---------------------------------------------------------------------------
 # Negation words that MUST NOT be stripped — same set as the training pipeline
@@ -62,7 +47,7 @@ _LEMMATIZER = WordNetLemmatizer()
 
 def _expand_contractions(text: str) -> str:
     contractions = {
-        r"won\'t": "will not",  r"can\'t": "can not",
+        r"won\'t": "will not", r"can\'t": "can not",
         r"couldn\'t": "could not", r"wouldn\'t": "would not",
         r"shouldn\'t": "should not", r"didn\'t": "did not",
         r"doesn\'t": "does not", r"don\'t": "do not",
@@ -125,28 +110,26 @@ def normalize_text(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# MLflow / DagsHub setup
-# Checks for the production env-var; falls back to local dagshub.init().
+# MLflow / DagsHub production setup
 # ---------------------------------------------------------------------------
 dagshub_token = os.getenv("CAPSTONE_TEST")
+if not dagshub_token:
+    raise EnvironmentError("CAPSTONE_TEST environment variable is not set")
 
-if dagshub_token:
-    # Production: credentials come from the environment variable
-    os.environ["MLFLOW_TRACKING_USERNAME"] = dagshub_token
-    os.environ["MLFLOW_TRACKING_PASSWORD"] = dagshub_token
-    mlflow.set_tracking_uri(
-        "https://dagshub.com/tharunkarthik2227/Capstone-Project---Mlops.mlflow"
-    )
-else:
-    # Local development: use dagshub.init() for interactive auth
-    dagshub.init(
-        repo_owner='tharunkarthik2227',
-        repo_name='Capstone-Project---Mlops',
-        mlflow=True,
-    )
-    mlflow.set_tracking_uri(
-        'https://dagshub.com/tharunkarthik2227/Capstone-Project---Mlops.mlflow'
-    )
+os.environ["MLFLOW_TRACKING_USERNAME"] = dagshub_token
+os.environ["MLFLOW_TRACKING_PASSWORD"] = dagshub_token
+
+dagshub_url = "https://dagshub.com"
+repo_owner = "tharunkarthik2227"
+repo_name = "Capstone-Project---Mlops"
+
+mlflow.set_tracking_uri(f"{dagshub_url}/{repo_owner}/{repo_name}.mlflow")
+
+dagshub.init(
+    repo_owner=repo_owner,
+    repo_name=repo_name,
+    mlflow=True,
+)
 
 # ---------------------------------------------------------------------------
 # Flask app
@@ -200,7 +183,6 @@ model = mlflow.pyfunc.load_model(model_uri)
 vectorizer = pickle.load(open("models/vectorizer.pkl", "rb"))
 
 # Build feature column names from the vectorizer vocabulary — must match training
-# TfidfVectorizer.get_feature_names_out() returns terms in vocabulary order
 FEATURE_NAMES = vectorizer.get_feature_names_out().tolist()
 
 
@@ -225,15 +207,11 @@ def predict():
     if not text:
         return render_template("index.html", result=None, error="Please enter some text.")
 
-    # Preprocess — must mirror training pipeline exactly
     cleaned = normalize_text(text)
 
-    # Vectorize
     features = vectorizer.transform([cleaned])
-    # Use vocabulary-derived column names (not plain integers)
     features_df = pd.DataFrame(features.toarray(), columns=FEATURE_NAMES)
 
-    # Predict
     result = model.predict(features_df)
     prediction = int(result[0])
 
@@ -245,13 +223,11 @@ def predict():
 
 @app.route("/metrics")
 def metrics():
-    """Expose custom Prometheus metrics."""
     return generate_latest(registry), 200, {"Content-Type": CONTENT_TYPE_LATEST}
 
 
 @app.route("/healthz")
 def healthz():
-    """Liveness probe for Docker / Kubernetes."""
     return {"status": "ok"}, 200
 
 

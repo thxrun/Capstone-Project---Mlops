@@ -8,7 +8,6 @@ import time
 import warnings
 
 import pandas as pd
-import dagshub
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import stopwords
 import nltk
@@ -20,15 +19,12 @@ from prometheus_client import (
 warnings.simplefilter("ignore", UserWarning)
 warnings.filterwarnings("ignore")
 
-# ---------------------------------------------------------------------------
-# Download required NLTK data (idempotent — safe to run on every startup)
-# ---------------------------------------------------------------------------
-nltk.download('wordnet', quiet=True)
+nltk.download('wordnet',   quiet=True)
 nltk.download('stopwords', quiet=True)
-nltk.download('omw-1.4', quiet=True)
+nltk.download('omw-1.4',   quiet=True)
 
 # ---------------------------------------------------------------------------
-# Negation words that MUST NOT be stripped — same set as the training pipeline
+# Negation words — must match training pipeline exactly
 # ---------------------------------------------------------------------------
 NEGATION_WORDS = {
     'no', 'not', 'nor', 'never', "n't", 'neither', 'nobody', 'nothing',
@@ -40,28 +36,27 @@ HTML_ENTITIES = {
     '&#39;': "'", '&nbsp;': ' ', '&apos;': "'",
 }
 
-# Build stop-word set once at module load — exclude negation words
-_STOP_WORDS = set(stopwords.words('english')) - NEGATION_WORDS
-_LEMMATIZER = WordNetLemmatizer()
+_STOP_WORDS  = set(stopwords.words('english')) - NEGATION_WORDS
+_LEMMATIZER  = WordNetLemmatizer()
 
 
 def _expand_contractions(text: str) -> str:
     contractions = {
-        r"won\'t": "will not", r"can\'t": "can not",
+        r"won\'t": "will not",    r"can\'t": "can not",
         r"couldn\'t": "could not", r"wouldn\'t": "would not",
         r"shouldn\'t": "should not", r"didn\'t": "did not",
-        r"doesn\'t": "does not", r"don\'t": "do not",
-        r"isn\'t": "is not", r"aren\'t": "are not",
-        r"wasn\'t": "was not", r"weren\'t": "were not",
-        r"hasn\'t": "has not", r"haven\'t": "have not",
-        r"hadn\'t": "had not", r"i\'m": "i am",
-        r"i\'ve": "i have", r"i\'ll": "i will",
-        r"i\'d": "i would", r"it\'s": "it is",
-        r"that\'s": "that is", r"there\'s": "there is",
-        r"they\'re": "they are", r"they\'ve": "they have",
+        r"doesn\'t": "does not",  r"don\'t": "do not",
+        r"isn\'t": "is not",      r"aren\'t": "are not",
+        r"wasn\'t": "was not",    r"weren\'t": "were not",
+        r"hasn\'t": "has not",    r"haven\'t": "have not",
+        r"hadn\'t": "had not",    r"i\'m": "i am",
+        r"i\'ve": "i have",       r"i\'ll": "i will",
+        r"i\'d": "i would",       r"it\'s": "it is",
+        r"that\'s": "that is",    r"there\'s": "there is",
+        r"they\'re": "they are",  r"they\'ve": "they have",
         r"they\'ll": "they will", r"we\'re": "we are",
-        r"we\'ve": "we have", r"you\'re": "you are",
-        r"you\'ve": "you have", r"\'s": "",
+        r"we\'ve": "we have",     r"you\'re": "you are",
+        r"you\'ve": "you have",   r"\'s": "",
     }
     for pattern, replacement in contractions.items():
         text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
@@ -69,48 +64,25 @@ def _expand_contractions(text: str) -> str:
 
 
 def normalize_text(text: str) -> str:
-    """
-    Mirror of data_preprocessing.py's preprocess_text() used during training.
-    Any deviation here causes train/serve skew and lower production accuracy.
-    """
     if not isinstance(text, str):
         return ''
-
-    # 1. HTML entities + tags
     for entity, char in HTML_ENTITIES.items():
         text = text.replace(entity, char)
     text = re.sub(r'<[^>]+>', ' ', text)
-
-    # 2. Expand contractions BEFORE lowercasing
     text = _expand_contractions(text)
-
-    # 3. Remove URLs and emails
     text = re.sub(r'https?://\S+|www\.\S+', '', text)
     text = re.sub(r'\S+@\S+', '', text)
-
-    # 4. Lowercase
     text = text.lower()
-
-    # 5. Replace digits with NUM token (same as training)
     text = re.sub(r'\b\d+\b', 'NUM', text)
-
-    # 6. Remove punctuation
     text = re.sub(r'[%s]' % re.escape(string.punctuation), ' ', text)
-
-    # 7. Collapse whitespace
     text = re.sub(r'\s+', ' ', text).strip()
-
-    # 8. Remove stop words (negation preserved)
     tokens = [w for w in text.split() if w not in _STOP_WORDS]
-
-    # 9. Lemmatize
     tokens = [_LEMMATIZER.lemmatize(w) for w in tokens]
-
     return ' '.join(tokens)
 
 
 # ---------------------------------------------------------------------------
-# MLflow / DagsHub production setup
+# MLflow / DagsHub — token-based auth only, NO dagshub.init()
 # ---------------------------------------------------------------------------
 dagshub_token = os.getenv("CAPSTONE_TEST")
 if not dagshub_token:
@@ -119,16 +91,11 @@ if not dagshub_token:
 os.environ["MLFLOW_TRACKING_USERNAME"] = dagshub_token
 os.environ["MLFLOW_TRACKING_PASSWORD"] = dagshub_token
 
-dagshub_url = "https://dagshub.com"
 repo_owner = "tharunkarthik2227"
-repo_name = "Capstone-Project---Mlops"
+repo_name  = "Capstone-Project---Mlops"
 
-mlflow.set_tracking_uri(f"{dagshub_url}/{repo_owner}/{repo_name}.mlflow")
-
-dagshub.init(
-    repo_owner=repo_owner,
-    repo_name=repo_name,
-    mlflow=True,
+mlflow.set_tracking_uri(
+    f"https://dagshub.com/{repo_owner}/{repo_name}.mlflow"
 )
 
 # ---------------------------------------------------------------------------
@@ -139,22 +106,16 @@ app = Flask(__name__)
 registry = CollectorRegistry()
 
 REQUEST_COUNT = Counter(
-    "app_request_count",
-    "Total number of requests to the app",
-    ["method", "endpoint"],
-    registry=registry,
+    "app_request_count", "Total number of requests to the app",
+    ["method", "endpoint"], registry=registry,
 )
 REQUEST_LATENCY = Histogram(
-    "app_request_latency_seconds",
-    "Latency of requests in seconds",
-    ["endpoint"],
-    registry=registry,
+    "app_request_latency_seconds", "Latency of requests in seconds",
+    ["endpoint"], registry=registry,
 )
 PREDICTION_COUNT = Counter(
-    "model_prediction_count",
-    "Count of predictions for each class",
-    ["prediction"],
-    registry=registry,
+    "model_prediction_count", "Count of predictions for each class",
+    ["prediction"], registry=registry,
 )
 
 # ---------------------------------------------------------------------------
@@ -180,9 +141,7 @@ model_uri = f"models:/{MODEL_NAME}/{model_version}"
 print(f"Loading model from: {model_uri}")
 model = mlflow.pyfunc.load_model(model_uri)
 
-vectorizer = pickle.load(open("models/vectorizer.pkl", "rb"))
-
-# Build feature column names from the vectorizer vocabulary — must match training
+vectorizer    = pickle.load(open("models/vectorizer.pkl", "rb"))
 FEATURE_NAMES = vectorizer.get_feature_names_out().tolist()
 
 
@@ -192,7 +151,7 @@ FEATURE_NAMES = vectorizer.get_feature_names_out().tolist()
 @app.route("/")
 def home():
     REQUEST_COUNT.labels(method="GET", endpoint="/").inc()
-    start = time.time()
+    start    = time.time()
     response = render_template("index.html", result=None)
     REQUEST_LATENCY.labels(endpoint="/").observe(time.time() - start)
     return response
@@ -207,13 +166,11 @@ def predict():
     if not text:
         return render_template("index.html", result=None, error="Please enter some text.")
 
-    cleaned = normalize_text(text)
-
-    features = vectorizer.transform([cleaned])
-    features_df = pd.DataFrame(features.toarray(), columns=FEATURE_NAMES)
-
-    result = model.predict(features_df)
-    prediction = int(result[0])
+    cleaned      = normalize_text(text)
+    features     = vectorizer.transform([cleaned])
+    features_df  = pd.DataFrame(features.toarray(), columns=FEATURE_NAMES)
+    result       = model.predict(features_df)
+    prediction   = int(result[0])
 
     PREDICTION_COUNT.labels(prediction=str(prediction)).inc()
     REQUEST_LATENCY.labels(endpoint="/predict").observe(time.time() - start)

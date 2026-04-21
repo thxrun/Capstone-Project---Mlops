@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentiment Analysis</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 560px;
+            background: #fff;
+            padding: 36px 32px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-size: 24px;
+            color: #1a1a2e;
+            margin-bottom: 6px;
+            text-align: center;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1.5px solid #ccc;
+            border-radius: 8px;
+            resize: vertical;
+            font-size: 15px;
+            line-height: 1.5;
+            color: #222;
+            transition: border-color 0.2s;
+            min-height: 120px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .char-count {
+            text-align: right;
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        button[type="submit"] {
+            width: 100%;
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            padding: 13px;
+            margin-top: 16px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s, opacity 0.2s;
+            position: relative;
+        }
+
+        button[type="submit"]:hover:not(:disabled) {
+            background-color: #43a047;
+        }
+
+        button[type="submit"]:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+        }
+
+        /* Spinner shown while waiting for prediction */
+        .spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255,255,255,0.4);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+        /* Result banner */
+        .result {
+            margin-top: 24px;
+            font-size: 18px;
+            font-weight: 700;
+            padding: 14px 18px;
+            border-radius: 8px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .positive {
+            color: #155724;
+            background-color: #d4edda;
+            border: 1.5px solid #b8dfc4;
+        }
+
+        .negative {
+            color: #721c24;
+            background-color: #f8d7da;
+            border: 1.5px solid #f1b0b7;
+        }
+
+        .error-banner {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background-color: #fff3cd;
+            border: 1.5px solid #ffc107;
+            border-radius: 8px;
+            color: #856404;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .icon { font-size: 22px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Sentiment Analysis</h1>
+        <p class="subtitle">Enter a movie review to detect its sentiment</p>
+
+        <form action="/predict" method="POST" id="predict-form">
+            <label for="text">Review text</label>
+            <textarea
+                id="text"
+                name="text"
+                rows="5"
+                placeholder="e.g. The acting was phenomenal but the plot felt rushed..."
+                maxlength="2000"
+                required
+            >{{ request.form.get('text', '') if request else '' }}</textarea>
+            <div class="char-count"><span id="char-count">0</span> / 2000</div>
+
+            <button type="submit" id="submit-btn">
+                Analyse Sentiment
+                <span class="spinner" id="spinner"></span>
+            </button>
+        </form>
+
+        {% if error %}
+            <div class="error-banner">⚠️ {{ error }}</div>
+        {% endif %}
+
+        {% if result is not none %}
+            <div class="result {% if result == 1 %}positive{% else %}negative{% endif %}">
+                {% if result == 1 %}
+                    <span class="icon">😊</span> Positive Sentiment
+                {% else %}
+                    <span class="icon">😞</span> Negative Sentiment
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+
+    <script>
+        const textarea  = document.getElementById('text');
+        const charCount = document.getElementById('char-count');
+        const form      = document.getElementById('predict-form');
+        const btn       = document.getElementById('submit-btn');
+        const spinner   = document.getElementById('spinner');
+
+        // Live character counter
+        textarea.addEventListener('input', () => {
+            charCount.textContent = textarea.value.length;
+        });
+
+        // Show loading state on submit
+        form.addEventListener('submit', () => {
+            btn.disabled        = true;
+            btn.textContent     = 'Analysing…  ';
+            spinner.style.display = 'inline-block';
+        });
+
+        // Initialise counter if the textarea has pre-filled text (e.g. after an error redirect)
+        charCount.textContent = textarea.value.length;
+    </script>
+
+</body>
+</html>

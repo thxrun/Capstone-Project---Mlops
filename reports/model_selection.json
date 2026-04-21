@@ -1,0 +1,27 @@
+{
+    "best_model": "logistic_regression",
+    "cv_auc": 0.875476911976912,
+    "all_results": {
+        "logistic_regression": {
+            "best_params": {
+                "C": 0.01,
+                "penalty": "l2"
+            },
+            "cv_auc": 0.8755
+        },
+        "linear_svc": {
+            "best_params": {
+                "estimator__C": 0.01
+            },
+            "cv_auc": 0.8743
+        },
+        "random_forest": {
+            "best_params": {
+                "max_depth": null,
+                "min_samples_leaf": 3,
+                "n_estimators": 200
+            },
+            "cv_auc": 0.8406
+        }
+    }
+}
